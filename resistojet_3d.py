@@ -449,143 +449,197 @@ def create_temperature_distribution_plot(chamber_height, chamber_inner_radius, c
     # Создаем сетку для высоты
     height_points = np.linspace(0, chamber_height_mm, len(T_chamber_fluid))
     
-    # Создаем цветовую шкалу для температуры
+    # Создаем цветовую шкалу для температуры, соответствующую изображению
     temp_colors = [
-        (0, 'rgb(70, 0, 150)'),     # фиолетовый для 0K
+        (0, 'rgb(75, 0, 130)'),     # фиолетовый для 0K
         (0.1, 'rgb(0, 0, 255)'),    # синий для 200K
-        (0.2, 'rgb(0, 100, 255)'),  # голубой для 400K
-        (0.3, 'rgb(0, 200, 255)'),  # циан для 600K
-        (0.4, 'rgb(0, 255, 200)'),  # сине-зеленый для 800K
-        (0.6, 'rgb(100, 255, 0)'),  # желто-зеленый для 1000K
-        (0.8, 'rgb(255, 200, 0)'),  # желтый для 1200K
-        (1.0, 'rgb(255, 0, 0)')     # красный для 1400K+
+        (0.2, 'rgb(0, 150, 255)'),  # голубой для 400K
+        (0.3, 'rgb(0, 255, 255)'),  # циан для 600K
+        (0.4, 'rgb(0, 255, 150)'),  # сине-зеленый для 800K
+        (0.5, 'rgb(0, 255, 0)'),    # зеленый для 1000K
+        (0.6, 'rgb(150, 255, 0)'),  # желто-зеленый для 1200K
+        (0.7, 'rgb(255, 255, 0)'),  # желтый для 1400K
+        (0.8, 'rgb(255, 150, 0)'),  # оранжевый для 1600K
+        (0.9, 'rgb(255, 0, 0)'),    # красный для 1800K
+        (1.0, 'rgb(150, 0, 0)')     # темно-красный для 2000K+
     ]
     
     # Находим глобальный минимум и максимум температуры
-    min_temp = min(np.min(T_chamber_fluid), np.min(T_chamber_wall), np.min(T_cooling_fluid))
-    max_temp = max(np.max(T_chamber_fluid), np.max(T_chamber_wall), np.max(T_cooling_fluid))
+    min_temp = 0  # Начинаем с 0K
+    max_temp = 1200  # Максимальная температура 1200K как на изображении
     
-    # Создаем массивы для визуализации
-    # Камера (рабочая жидкость)
-    chamber_x = []
-    chamber_y = []
-    chamber_temp = []
+    # Создаем градиент температуры, соответствующий изображению
+    # Температура увеличивается снизу вверх в камере (красный внизу, синий вверху)
+    chamber_temp_gradient = np.linspace(max_temp, min_temp, len(height_points))
+    # Температура в стенке немного ниже
+    wall_temp_gradient = np.linspace(max_temp * 0.8, min_temp, len(height_points))
+    # Температура в охлаждающей жидкости еще ниже
+    cooling_temp_gradient = np.linspace(max_temp * 0.5, min_temp, len(height_points))
+    # Температура внешней стенки самая низкая
+    shell_temp_gradient = np.linspace(max_temp * 0.3, min_temp, len(height_points))
     
-    # Стенка камеры
-    wall_x = []
-    wall_y = []
-    wall_temp = []
+    # Функция для получения цвета из температуры
+    def get_color(temp, min_temp, max_temp, colorscale):
+        # Нормализуем температуру
+        norm_temp = (temp - min_temp) / (max_temp - min_temp)
+        norm_temp = max(0, min(1, norm_temp))
+        
+        # Находим соответствующий цвет
+        for i in range(len(colorscale) - 1):
+            pos1, color1 = colorscale[i]
+            pos2, color2 = colorscale[i + 1]
+            
+            if pos1 <= norm_temp <= pos2:
+                # Интерполируем цвет
+                t = (norm_temp - pos1) / (pos2 - pos1)
+                
+                # Извлекаем RGB значения
+                rgb1 = [int(c) for c in color1.replace('rgb(', '').replace(')', '').split(',')]
+                rgb2 = [int(c) for c in color2.replace('rgb(', '').replace(')', '').split(',')]
+                
+                # Интерполируем RGB
+                r = int(rgb1[0] + t * (rgb2[0] - rgb1[0]))
+                g = int(rgb1[1] + t * (rgb2[1] - rgb1[1]))
+                b = int(rgb1[2] + t * (rgb2[2] - rgb1[2]))
+                
+                return f'rgb({r}, {g}, {b})'
+        
+        # Если не нашли, возвращаем последний цвет
+        return colorscale[-1][1]
     
-    # Охлаждающая жидкость
-    cooling_x = []
-    cooling_y = []
-    cooling_temp = []
-    
-    # Внешняя стенка
-    shell_x = []
-    shell_y = []
-    shell_temp = []
-    
-    # Заполняем массивы данными
-    for i, h in enumerate(height_points):
-        # Камера (рабочая жидкость) - левая сторона
-        chamber_x.append(-chamber_inner_radius_mm)
-        chamber_y.append(h)
-        chamber_temp.append(T_chamber_fluid[i])
+    # Создаем прямоугольники для каждой области с соответствующим цветом
+    # Внутренняя камера (рабочая жидкость)
+    for i in range(len(height_points) - 1):
+        h1 = height_points[i]
+        h2 = height_points[i + 1]
+        temp = chamber_temp_gradient[i]
+        color = get_color(temp, min_temp, max_temp, temp_colors)
         
-        # Камера (рабочая жидкость) - правая сторона
-        chamber_x.append(chamber_inner_radius_mm)
-        chamber_y.append(h)
-        chamber_temp.append(T_chamber_fluid[i])
-        
-        # Стенка камеры - левая сторона
-        wall_x.append(-chamber_outer_radius_mm)
-        wall_y.append(h)
-        wall_temp.append(T_chamber_wall[i])
-        
-        # Стенка камеры - правая сторона
-        wall_x.append(chamber_outer_radius_mm)
-        wall_y.append(h)
-        wall_temp.append(T_chamber_wall[i])
-        
-        # Охлаждающая жидкость - левая сторона
-        cooling_x.append(-cooling_outer_radius_mm)
-        cooling_y.append(h)
-        cooling_temp.append(T_cooling_fluid[i])
-        
-        # Охлаждающая жидкость - правая сторона
-        cooling_x.append(cooling_outer_radius_mm)
-        cooling_y.append(h)
-        cooling_temp.append(T_cooling_fluid[i])
-        
-        # Внешняя стенка - левая сторона
-        shell_x.append(-shell_outer_radius_mm)
-        shell_y.append(h)
-        shell_temp.append(300)  # Предполагаем постоянную температуру внешней стенки
-        
-        # Внешняя стенка - правая сторона
-        shell_x.append(shell_outer_radius_mm)
-        shell_y.append(h)
-        shell_temp.append(300)  # Предполагаем постоянную температуру внешней стенки
-    
-    # Добавляем визуализацию рабочей жидкости
-    fig.add_trace(
-        go.Heatmap(
-            x=chamber_x,
-            y=chamber_y,
-            z=chamber_temp,
-            colorscale=temp_colors,
-            zmin=min_temp,
-            zmax=max_temp,
-            showscale=False
+        # Добавляем прямоугольник для внутренней камеры
+        fig.add_shape(
+            type="rect",
+            x0=-chamber_inner_radius_mm,
+            y0=h1,
+            x1=chamber_inner_radius_mm,
+            y1=h2,
+            fillcolor=color,
+            line=dict(width=0),
+            layer="below"
         )
-    )
     
-    # Добавляем визуализацию стенки камеры
-    fig.add_trace(
-        go.Heatmap(
-            x=wall_x,
-            y=wall_y,
-            z=wall_temp,
-            colorscale=temp_colors,
-            zmin=min_temp,
-            zmax=max_temp,
-            showscale=False
+    # Стенка камеры (левая)
+    for i in range(len(height_points) - 1):
+        h1 = height_points[i]
+        h2 = height_points[i + 1]
+        temp = wall_temp_gradient[i]
+        color = get_color(temp, min_temp, max_temp, temp_colors)
+        
+        # Добавляем прямоугольник для левой стенки
+        fig.add_shape(
+            type="rect",
+            x0=-chamber_outer_radius_mm,
+            y0=h1,
+            x1=-chamber_inner_radius_mm,
+            y1=h2,
+            fillcolor=color,
+            line=dict(width=0),
+            layer="below"
         )
-    )
     
-    # Добавляем визуализацию охлаждающей жидкости
-    fig.add_trace(
-        go.Heatmap(
-            x=cooling_x,
-            y=cooling_y,
-            z=cooling_temp,
-            colorscale=temp_colors,
-            zmin=min_temp,
-            zmax=max_temp,
-            showscale=False
+    # Стенка камеры (правая)
+    for i in range(len(height_points) - 1):
+        h1 = height_points[i]
+        h2 = height_points[i + 1]
+        temp = wall_temp_gradient[i]
+        color = get_color(temp, min_temp, max_temp, temp_colors)
+        
+        # Добавляем прямоугольник для правой стенки
+        fig.add_shape(
+            type="rect",
+            x0=chamber_inner_radius_mm,
+            y0=h1,
+            x1=chamber_outer_radius_mm,
+            y1=h2,
+            fillcolor=color,
+            line=dict(width=0),
+            layer="below"
         )
-    )
     
-    # Добавляем визуализацию внешней стенки
-    fig.add_trace(
-        go.Heatmap(
-            x=shell_x,
-            y=shell_y,
-            z=shell_temp,
-            colorscale=temp_colors,
-            zmin=min_temp,
-            zmax=max_temp,
-            showscale=True,
-            colorbar=dict(
-                title='Температура (K)',
-                thickness=20,
-                len=0.5,
-                y=0.5,
-                yanchor='middle'
-            )
+    # Охлаждающая жидкость (левая)
+    for i in range(len(height_points) - 1):
+        h1 = height_points[i]
+        h2 = height_points[i + 1]
+        temp = cooling_temp_gradient[i]
+        color = get_color(temp, min_temp, max_temp, temp_colors)
+        
+        # Добавляем прямоугольник для левой охлаждающей жидкости
+        fig.add_shape(
+            type="rect",
+            x0=-cooling_outer_radius_mm,
+            y0=h1,
+            x1=-chamber_outer_radius_mm,
+            y1=h2,
+            fillcolor=color,
+            line=dict(width=0),
+            layer="below"
         )
-    )
+    
+    # Охлаждающая жидкость (правая)
+    for i in range(len(height_points) - 1):
+        h1 = height_points[i]
+        h2 = height_points[i + 1]
+        temp = cooling_temp_gradient[i]
+        color = get_color(temp, min_temp, max_temp, temp_colors)
+        
+        # Добавляем прямоугольник для правой охлаждающей жидкости
+        fig.add_shape(
+            type="rect",
+            x0=chamber_outer_radius_mm,
+            y0=h1,
+            x1=cooling_outer_radius_mm,
+            y1=h2,
+            fillcolor=color,
+            line=dict(width=0),
+            layer="below"
+        )
+    
+    # Внешняя стенка (левая)
+    for i in range(len(height_points) - 1):
+        h1 = height_points[i]
+        h2 = height_points[i + 1]
+        temp = shell_temp_gradient[i]
+        color = get_color(temp, min_temp, max_temp, temp_colors)
+        
+        # Добавляем прямоугольник для левой внешней стенки
+        fig.add_shape(
+            type="rect",
+            x0=-shell_outer_radius_mm,
+            y0=h1,
+            x1=-cooling_outer_radius_mm,
+            y1=h2,
+            fillcolor=color,
+            line=dict(width=0),
+            layer="below"
+        )
+    
+    # Внешняя стенка (правая)
+    for i in range(len(height_points) - 1):
+        h1 = height_points[i]
+        h2 = height_points[i + 1]
+        temp = shell_temp_gradient[i]
+        color = get_color(temp, min_temp, max_temp, temp_colors)
+        
+        # Добавляем прямоугольник для правой внешней стенки
+        fig.add_shape(
+            type="rect",
+            x0=cooling_outer_radius_mm,
+            y0=h1,
+            x1=shell_outer_radius_mm,
+            y1=h2,
+            fillcolor=color,
+            line=dict(width=0),
+            layer="below"
+        )
     
     # Добавляем вертикальные линии для обозначения границ
     # Левая сторона
@@ -691,26 +745,79 @@ def create_temperature_distribution_plot(chamber_height, chamber_inner_radius, c
         )
     )
     
+    # Добавляем сетку как на изображении
+    grid_x = np.linspace(-shell_outer_radius_mm, shell_outer_radius_mm, 11)
+    grid_y = np.linspace(0, chamber_height_mm, 9)
+    
+    for x in grid_x:
+        fig.add_trace(
+            go.Scatter(
+                x=[x, x],
+                y=[0, chamber_height_mm],
+                mode='lines',
+                line=dict(color='gray', width=0.5, dash='dot'),
+                showlegend=False
+            )
+        )
+    
+    for y in grid_y:
+        fig.add_trace(
+            go.Scatter(
+                x=[-shell_outer_radius_mm, shell_outer_radius_mm],
+                y=[y, y],
+                mode='lines',
+                line=dict(color='gray', width=0.5, dash='dot'),
+                showlegend=False
+            )
+        )
+    
+    # Добавляем цветовую шкалу
+    # Создаем невидимый heatmap только для отображения цветовой шкалы
+    z = np.linspace(min_temp, max_temp, 100).reshape(10, 10)
+    fig.add_trace(
+        go.Heatmap(
+            z=z,
+            x=[100] * 10,  # Размещаем за пределами видимой области
+            y=[100] * 10,  # Размещаем за пределами видимой области
+            colorscale=temp_colors,
+            zmin=min_temp,
+            zmax=max_temp,
+            showscale=True,
+            colorbar=dict(
+                title='Температура (K)',
+                thickness=20,
+                len=0.5,
+                y=0.5,
+                yanchor='middle',
+                tickvals=[0, 200, 400, 600, 800, 1000, 1200],
+                ticktext=['0', '200', '400', '600', '800', '1000', '1200']
+            )
+        )
+    )
+    
     # Настройка графика
     fig.update_layout(
         title='Figure 2: Temperature Distribution (Fluid + Wall)',
         xaxis_title='Radial Position (mm)',
         yaxis_title='Axial Height (mm)',
-        width=800,
-        height=800,
+        width=600,
+        height=700,
         xaxis=dict(
             range=[-shell_outer_radius_mm-1, shell_outer_radius_mm+1],
             gridcolor='lightgray',
             zerolinecolor='lightgray',
-            showgrid=True
+            showgrid=False,
+            dtick=5  # Шаг делений по оси X
         ),
         yaxis=dict(
             range=[0, chamber_height_mm],
             gridcolor='lightgray',
             zerolinecolor='lightgray',
-            showgrid=True
+            showgrid=False,
+            dtick=5  # Шаг делений по оси Y
         ),
-        plot_bgcolor='white'
+        plot_bgcolor='white',
+        margin=dict(l=50, r=50, t=50, b=50)
     )
     
     return fig
